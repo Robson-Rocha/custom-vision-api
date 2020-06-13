@@ -1,6 +1,6 @@
 ﻿namespace Exemplos.CustomVisionApi
 {
-    using Microsoft.Extensions.CommandLineUtils;
+    using McMaster.Extensions.CommandLineUtils;
     using Microsoft.Extensions.Configuration;
     using System;
     using System.IO;
@@ -44,10 +44,16 @@
         );
         public static IConfiguration Configuration => _configuration.Value;
 
-        public static int Fail(string message, int failureCode = -1)
+        public static int Failure(string message, int failureCode = -1)
         {
             Console.WriteLine(message);
             return failureCode;
+        }
+        
+        public static int Success(string message)
+        {
+            Console.WriteLine(message);
+            return 0;
         }
     }
 }

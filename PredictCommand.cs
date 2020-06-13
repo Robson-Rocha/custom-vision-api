@@ -3,28 +3,25 @@
     using System;
     using System.Collections.Generic;
     using System.IO;
-    using System.Linq;
-    using Microsoft.Cognitive.CustomVision.Prediction;
-    using Microsoft.Cognitive.CustomVision.Prediction.Models;
-    using Microsoft.Cognitive.CustomVision.Training;
-    using Microsoft.Cognitive.CustomVision.Training.Models;
-    using Microsoft.Extensions.CommandLineUtils;
+    using McMaster.Extensions.CommandLineUtils;
+    using Microsoft.Azure.CognitiveServices.Vision.CustomVision.Prediction;
+    using Microsoft.Azure.CognitiveServices.Vision.CustomVision.Prediction.Models;
+    using Microsoft.Azure.CognitiveServices.Vision.CustomVision.Training;
 
     internal class PredictCommand : ICommand
     {
-        private readonly Guid _projectId;
-        private readonly string _trainingKey;
-        private readonly string _predictionKey;
-
-        private CommandArgument _pathArgument;
-
         public string CommandName => "predict";
 
-        public PredictCommand(Guid projectId, string trainingKey, string predictionKey)
+        private CommandOption _projectIdOption;
+        private CommandOption _modelNameOption;
+        private CommandOption _pathOption;
+        private readonly CustomVisionTrainingClient _trainingApi;
+        private readonly CustomVisionPredictionClient _predictionApi;
+
+        public PredictCommand(CustomVisionTrainingClient trainingApi, CustomVisionPredictionClient predictionApi)
         {
-            _projectId = projectId;
-            _trainingKey = trainingKey;
-            _predictionKey = predictionKey;
+            _trainingApi = trainingApi;
+            _predictionApi = predictionApi;
         }
 
         public void Configure(CommandLineApplication command)
@@ -32,36 +29,34 @@
             command.Description = "Tries to predict the classification (tag) of the given image.";
             command.HelpOption("-?|-h|--help");
 
-            _pathArgument = command.Argument("path", "Required. The path of one or more images whose classification (tag) must be predicted.", multipleValues: true);
+            _projectIdOption = command.Option("--projectId|-p", "Required. The id of the project to be used for predictions.", CommandOptionType.SingleValue).IsRequired();
+            _modelNameOption = command.Option("--modelName|-m", "Required. The name of the published trained model used for predictions.", CommandOptionType.SingleValue).IsRequired();
+            _pathOption = command.Option("--imagePath|-i", "Required. The path of one or more images whose classification (tag) must be predicted.", CommandOptionType.MultipleValue).IsRequired();
+
+            _projectIdOption.Validators.Add(new ProjectIdOptionValidator(_trainingApi));
         }
 
         public int Execute()
         {
-            List<string> imagePaths = _pathArgument.Values;
+            string modelName = _modelNameOption.Value();
+            Guid projectId = Guid.Parse(_projectIdOption.Value());
+            List<string> imagePaths = _pathOption.Values;
 
             foreach (string imagePath in imagePaths)
                 if (!File.Exists(imagePath))
-                    return Util.Fail($"The path '{imagePath}' does not exist.");
-
-            TrainingApi trainingApi = new TrainingApi() { ApiKey = _trainingKey };
-            IList<Iteration> iterations = trainingApi.GetIterations(_projectId);
-
-            if (iterations.Count == 0)
-                return Util.Fail("You must train the classifier before trying to make any prediction.\r\nUse the [upload] command to upload at least 5 images to a given classification (tag), and then use the command [train] to train the classifier.");
-
-            Guid iterationId = iterations.OrderByDescending(i => i.IsDefault).ThenByDescending(i => i.TrainedAt).First().Id;
-
-            PredictionEndpoint predictionEndpoint = new PredictionEndpoint() { ApiKey = _predictionKey };
+                    return Util.Failure($"The path '{imagePath}' does not exist.");
 
             foreach (string imagePath in imagePaths)
             {
                 Console.WriteLine($"\r\n{imagePath}:");
-                ImagePredictionResultModel result;
+                ImagePrediction result;
                 using (var imageStream = new MemoryStream(File.ReadAllBytes(imagePath)))
-                    result = predictionEndpoint.PredictImage(_projectId, imageStream, iterationId);
+                    result = _predictionApi.ClassifyImage(projectId, modelName, imageStream);
 
-                foreach (ImageTagPredictionModel predictedTag in result.Predictions)
-                    Console.WriteLine($"\t{predictedTag.Tag}: {predictedTag.Probability:P2}");
+                foreach (PredictionModel predictionModel in result.Predictions)
+                {
+                    Console.WriteLine($"\t{predictionModel.TagName}: {predictionModel.Probability:P2}");
+                }
             }
 
             return 0;
