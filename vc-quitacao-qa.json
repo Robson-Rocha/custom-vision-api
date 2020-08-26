@@ -1,0 +1,19 @@
+
+{
+  "customVision": {
+    "training" : {
+      "key": "a9295c3c2339486ba9e1a62c2db50fc4",
+      "endpoint": "https://vc-cog-motoristasquitacao.cognitiveservices.azure.com/"
+    },
+    "prediction": {
+      "key": "dc096ee595ed4931be7fd5371a2aab93",
+      "resourceId": "/subscriptions/7cf2bdc1-d780-41d5-9d32-2f81017514ec/resourceGroups/RG-GESTAODEPATIO-APP-VCBR/providers/Microsoft.CognitiveServices/accounts/vccogmotoristasqui-Prediction",
+      "endpoint": "https://vccogmotoristasqui-prediction.cognitiveservices.azure.com/"
+    }
+  },
+  "computerVision": {
+    "key": "",
+    "endpoint": ""
+  },
+  "projectId": "546aadb9-778a-4fd5-bb9f-d0dfc6618a98"
+}

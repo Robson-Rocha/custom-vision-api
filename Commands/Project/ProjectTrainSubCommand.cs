@@ -1,43 +1,39 @@
-﻿namespace Exemplos.CustomVisionApi
+﻿namespace Exemplos.CustomVisionApi.Commands.Project
 {
     using System;
     using System.Linq;
     using System.Threading;
+    using Exemplos.CustomVisionApi.Extensions;
     using McMaster.Extensions.CommandLineUtils;
     using Microsoft.Azure.CognitiveServices.Vision.CustomVision.Training;
     using Microsoft.Azure.CognitiveServices.Vision.CustomVision.Training.Models;
+    
 
-    internal class ProjectTrainSubCommand : ICommand
+    internal class ProjectTrainSubCommand : BaseCommandWithProjectId
     {
-        private readonly string _predictionResourceId;
+        public override string CommandName => "train";
 
-        public string CommandName => "train";
-
-        private CommandOption _projectIdOption;
         private CommandOption _modelNameOption;
-        private readonly CustomVisionTrainingClient _trainingApi;
 
-        public ProjectTrainSubCommand(CustomVisionTrainingClient trainingApi, string predictionResourceId)
+        public override void Configure(CommandLineApplication command)
         {
-            this._trainingApi = trainingApi;
-            _predictionResourceId = predictionResourceId;
-        }
-
-        public void Configure(CommandLineApplication command)
-        {
+            base.Configure(command);
             command.Description = "Train the classifier using previously uploaded images.";
-            command.HelpOption("-?|-h|--help");
 
-            _projectIdOption = command.Option("--projectId|-p", "Required. The id of the project to be trained.", CommandOptionType.SingleValue).IsRequired();
             _modelNameOption = command.Option("--modelName|-m", "Required. The name of the published model to be trained for use in predictions.", CommandOptionType.SingleValue).IsRequired();
-
-            _projectIdOption.Validators.Add(new ProjectIdOptionValidator(_trainingApi));
         }
 
-        public int Execute()
+        public override int Execute()
         {
-            Guid projectId = Guid.Parse(_projectIdOption.Value());
+            base.Execute();
+            Guid projectId = GetProjectIdValue();
             string modelName = _modelNameOption.Value();
+            var _trainingApi = Util.GetTrainingApi();
+            string _predictionResourceId = Util.Configuration["customVision:prediction:resourceId"];
+            if (string.IsNullOrWhiteSpace(_predictionResourceId))
+            {
+                return Util.Failure("No Custom Vision Prediction Resource Id set in the config file");
+            }
 
             Console.Write("Training");
             Iteration iteration;
@@ -49,6 +45,11 @@
             {
                 Console.Write(" ...training not needed;");
                 iteration = _trainingApi.GetIterations(projectId).FirstOrDefault(i => i.PublishName == modelName);
+            }
+
+            if (iteration == null)
+            {
+                return Util.Failure($"\r\nNo published iterations with name {modelName} were found. Check if there are unpublished iterations.");
             }
 
             while (iteration.Status == "Training")
@@ -68,10 +69,17 @@
                     _trainingApi.PublishIteration(projectId, iteration.Id, modelName, _predictionResourceId);
                     published = true;
                 }
-                catch(CustomVisionErrorException customVisionError) when (customVisionError.Body.Code == CustomVisionErrorCodes.BadRequestInvalidPublishName ||
-                                                                          customVisionError.Body.Code == CustomVisionErrorCodes.BadRequestIterationIsPublished)
+                catch(CustomVisionErrorException customVisionError_PublishIteration) when (customVisionError_PublishIteration.Body.Code == CustomVisionErrorCodes.BadRequestInvalidPublishName ||
+                                                                                           customVisionError_PublishIteration.Body.Code == CustomVisionErrorCodes.BadRequestIterationIsPublished)
                 {
-                    _trainingApi.UnpublishIteration(projectId, iteration.Id);
+                    try
+                    {
+                        _trainingApi.UnpublishIteration(projectId, iteration.Id);
+                    }
+                    catch(CustomVisionErrorException customVisionError_UnpublishIteration)
+                    {
+                        return Util.FailureObject(customVisionError_UnpublishIteration.Body);
+                    }
                 }
                 catch
                 {
@@ -81,7 +89,7 @@
 
             Console.WriteLine(" done!");
 
-            return 0;
+            return Util.Success();
         }
     }
 }
