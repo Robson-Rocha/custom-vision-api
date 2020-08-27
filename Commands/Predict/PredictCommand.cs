@@ -26,6 +26,7 @@
 
         public override int Execute()
         {
+            base.Execute();
             string modelName = _modelNameOption.Value();
             Guid projectId = GetProjectIdValue();
             List<string> imagePaths = _pathOption.Values;
