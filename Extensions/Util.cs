@@ -6,6 +6,8 @@
     using Microsoft.Extensions.Configuration;
     using System;
     using System.IO;
+    using System.Net;
+    using System.Net.Http;
     using System.Text.Json;
 
     public static class Util
@@ -123,6 +125,16 @@
             Console.WriteLine(message);
             Console.ForegroundColor = currentForegroundColor;
             return Util.Success();
+        }
+
+        private static Lazy<HttpClient> _httpClient = new Lazy<HttpClient>(() => new HttpClient());
+        private static HttpClient HttpClient => _httpClient.Value;
+
+        public static bool TestUrl(string url, out HttpStatusCode statusCode)
+        {
+            var result = HttpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead).Result;
+            statusCode = result.StatusCode;
+            return result.IsSuccessStatusCode;
         }
     }
 }
